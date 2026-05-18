@@ -6,7 +6,7 @@ from qiskit.quantum_info import Statevector, SparsePauliOp
 from mssim.engines.abstract import BenchmarkEngine
 
 @dataclass
-class StatevectorEngine(BenchmarkEngine):
+class QiskitEngine(BenchmarkEngine):
 
     def expectation_value(
         self,
@@ -26,4 +26,4 @@ class StatevectorEngine(BenchmarkEngine):
 
     @property
     def name(self) -> str:
-        return "statevector"
+        return "qiskit"
