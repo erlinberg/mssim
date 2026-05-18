@@ -41,7 +41,7 @@ import numpy as np
 @dataclass
 class ResultRow:
     """
-    One measurement: a single (engine, circuit, parameter-sample) trial.
+    One measurement: a single (engine, circuit, parameter-sample) trial. It is what is saved in the result file.
 
     Fields
     ------
@@ -86,7 +86,6 @@ class ResultRow:
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
-        # Convert numpy scalars if present
         for k, v in d.items():
             if isinstance(v, np.floating):
                 d[k] = float(v)
@@ -99,9 +98,9 @@ class ResultRow:
 class BatchResult:
     """
     Aggregate statistics over ``n_runs`` trials for a single (engine, circuit)
-    configuration.
+    configuration. It's for now only used in main.py for printing the summary at the end of execution.
 
-    Built by :class:`~csbench.executor.Executor` after completing a full batch.
+    Built by :class:`~mssim.executor.executor` after completing a full batch.
     """
 
     engine: str
@@ -111,7 +110,6 @@ class BatchResult:
     n_runs: int
     rows: list[ResultRow]
 
-    # --- Computed on demand ------------------------------------------------
 
     @property
     def expectation_values(self) -> np.ndarray:
@@ -150,11 +148,6 @@ class BatchResult:
         return d
 
 
-# ---------------------------------------------------------------------------
-# JSONL writer  (POSIX atomic via fcntl.flock)
-# ---------------------------------------------------------------------------
-
-
 def save_result_jsonl(filename: str, row: ResultRow) -> None:
     """
     Append one :class:`ResultRow` to a newline-delimited JSON file.
@@ -180,13 +173,9 @@ def save_result_jsonl(filename: str, row: ResultRow) -> None:
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
-# ---------------------------------------------------------------------------
-# HDF5 writer  (thread-safe via per-file lock, process-safe via SWMR)
-# ---------------------------------------------------------------------------
 
 _hdf5_locks: dict[str, threading.Lock] = {}
 _hdf5_locks_meta = threading.Lock()
-
 
 def _get_hdf5_lock(filename: str) -> threading.Lock:
     with _hdf5_locks_meta:
@@ -259,14 +248,10 @@ def save_result_hdf5(filename: str, row: ResultRow) -> None:
                 _append(k, v)
 
 
-# ---------------------------------------------------------------------------
-# Unified interface
-# ---------------------------------------------------------------------------
-
 
 def save_result(filename: str, row: ResultRow, fmt: str = "jsonl") -> None:
     """
-    Persist a :class:`ResultRow` to *filename* in the requested format.
+    Wrapper on the file specific functions. Writes a :class:`ResultRow` to filename in the requested format.
 
     Parameters
     ----------
