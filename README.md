@@ -1,6 +1,6 @@
 # mssim — Multi System Simulator
 
-A quantum circuit classical simulation package supporting multiple simulation engines. Designed for high-performance benchmarking and comparative analysis of different quantum simulation backends.
+A quantum circuit classical simulation package supporting multiple simulation engines. Designed for comparative analysis of different simulation backends.
 
 ## Installation
 
@@ -24,11 +24,10 @@ mssim/
 │   └── engines/
 │       ├── __init__.py
 │       ├── abstract.py              # BenchmarkEngine base class
-│       ├── converters.py            # QASM format converters
-│       ├── mpstab_engine.py         # MPStab / HSMPO backend
-│       ├── quimb_engine.py          # Quimb tensor network backend
-│       ├── statevector_engine.py    # Qiskit statevector backend
-│       └── registry.py              # Engine factory & registry
+│       ├── mpstab.py                # MPStab / HSMPO backend
+│       ├── quimb.py                 # Quimb tensor network backend
+│       ├── qiskit.py                # Qiskit statevector backend
+│       └── library.py               # Engine factory & registry
 ├── script/
 │   ├── run_simple.sh                # Single-machine launcher
 │   └── run_parallel.sh              # SLURM array job launcher
@@ -44,36 +43,36 @@ mssim/
 
 ```mermaid
 graph TD
-    Settings["📋 Settings JSON<br/>{model, execution, output}"]
-    Main["🚀 main.py<br/>Parse args & config merge"]
-    CircuitLib["📚 circuits.library<br/>build_circuit()"]
-    EngineReg["⚙️ engines.registry<br/>build_engines()"]
-    CircuitModel["🔷 CircuitModel<br/>name, n_qubits, depth, qasm, observable"]
+    Settings["📋 Settings JSON<br/>Parameters"]
+    Main["⚙️ main.py<br/>Parse args and call subroutines"]
+    CircuitLibrary["📚 circuits.library<br/>build_circuit()"]
+    EngineLibrary["📚 engines.library<br/>build_engines()"]
+    CircuitModel["🔷 CircuitModel<br/>qasm circuit & model parameters"]
     Executor["⚡ Executor<br/>Run engines × n_runs"]
     Engine1["🧮 Engine 1<br/>Tensor Network"]
     Engine2["🧮 Engine 2<br/>MPStab"]
     Engine3["🧮 Engine 3<br/>Statevector"]
-    Output["💾 output.py<br/>Serialize results"]
+    Output["💾 output.py<br/>ResultRow"]
     Results["📊 results.jsonl<br/>Execution metrics"]
     
-    Settings -->|"CLI overrides"| Main
-    Main -->|"circuit_name, n_qubits, depth"| CircuitLib
-    Main -->|"engine keys, max_bond"| EngineReg
-    CircuitLib -->|"returns"| CircuitModel
-    EngineReg -->|"returns engines[]"| Executor
-    CircuitModel -->|"input model"| Executor
-    Executor -->|"run()"| Engine1
-    Executor -->|"run()"| Engine2
-    Executor -->|"run()"| Engine3
-    Engine1 -->|"result"| Output
-    Engine2 -->|"result"| Output
-    Engine3 -->|"result"| Output
-    Output -->|"write()"| Results
+    Settings -->|"CLI"| Main
+    Main -->|"circuit parameters"| CircuitLibrary
+    Main -->|"engine parameters"| EngineLibrary
+    CircuitLibrary -->|"Circuit"| CircuitModel
+    EngineLibrary -->Executor
+    CircuitModel --> Executor
+    Executor -->Engine1
+    Executor -->Engine2
+    Executor -->Engine3
+    Engine1 -->|"Raw result"| Output
+    Engine2 -->|"Raw result"| Output
+    Engine3 -->|"Raw result"| Output
+    Output -->|"Write"| Results
     
     style Settings fill:#e1f5ff
     style Main fill:#fff3e0
-    style CircuitLib fill:#f3e5f5
-    style EngineReg fill:#f3e5f5
+    style CircuitLibrary fill:#f3e5f5
+    style EngineLibrary fill:#f3e5f5
     style CircuitModel fill:#e8f5e9
     style Executor fill:#fce4ec
     style Engine1 fill:#fff9c4
@@ -85,11 +84,11 @@ graph TD
 
 ## Supported Engines
 
-| Engine | Backend | Use Case |
+| Engine | Backend | Type |
 |--------|---------|----------|
-| `"tn"` | Quimb | Tensor network, large systems |
-| `"mpstab"` | MPStab | MPS with stabilizer optimization |
-| `"sv"` | Qiskit | Exact statevector simulation |
+| `"quimb"` | Quimb | Tensor network|
+| `"mpstab"` | MPStab | Hybrid Stabilizer-Tensor Network|
+| `"qiskit"` | Qiskit | Statevector|
 
 ## Usage
 
@@ -110,17 +109,18 @@ pip install -e .
     "circuit": "random_clifford",
     "n_qubits": 8,
     "depth": 4,
-    "observable": ["Z", "Z", "I", "I", "Z", "Z", "I", "I"],
+    "observable": ["ZZXZXXYY"],
     "kwargs": {}
   },
   "execution": {
-    "engines": ["tn", "sv"],
+    "engines": ["quimb", "qiskit"],
     "n_runs": 10,
     "max_bond_dimension": 32
   },
   "output": {
     "filename": "results/output.jsonl",
-    "format": "jsonl"
+    "format": "jsonl",
+    "verbose": False
   }
 }
 ```
@@ -139,28 +139,8 @@ pip install -e .
 | `execution.max_bond_dimension` | int\|null | MPS bond cap | `32` |
 | `output.filename` | str | Output file path | `"results/output.jsonl"` |
 | `output.format` | str | Output format | `"jsonl"` or `"hdf5"` |
+| `output.verbose` | bool | Verbosity | `true` or `false` |
 
-## Core Components
-
-### CircuitModel (`circuits/model.py`)
-Self-contained quantum circuit specification:
-- **qasm**: OpenQASM 2.0 string with parametrized gates
-- **observable**: Pauli measurement operator
-- **parameter_sampler**: Callable generating fresh random parameters
-- **metadata**: Circuit-specific configuration
-
-### Executor (`executor.py`)
-Orchestrates simulation runs:
-- Runs each engine multiple times (`n_runs`)
-- Collects timing and result statistics
-- Handles errors gracefully with `skip_on_error` mode
-- Outputs results in JSONL or HDF5 format
-
-### Output (`output.py`)
-Result row serialization:
-- Atomic writes prevent corruption
-- Stores execution metrics (time, fidelity, observables)
-- Supports JSONL and HDF5 backends
 
 ## SLURM Integration
 
@@ -171,4 +151,4 @@ sbatch script/run_parallel.sh <settings.json>
 # Job runs with parameters varied across array tasks
 ```
 
-The launcher automatically embeds SLURM metadata (job ID, array task ID, hostname) in result files for traceability.
+The launcher automatically embeds SLURM metadata (job ID, array task ID, hostname) in result files for traceability (work in progress).
