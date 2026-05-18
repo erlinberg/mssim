@@ -4,6 +4,7 @@
 #   bash run_simple.sh <settings.json> [extra_python_args...]
 
 set -euo pipefail
+module load jq/1.6-GCCcore-12.2.0
 
 # Parse arguments
 SETTINGS="${1:?Usage: bash run_simple.sh <settings.json>}"
@@ -41,6 +42,8 @@ fi
 echo "Sweep dimensions: n_qubits=${N_Q} × depth=${N_D} × engines=${N_E} = ${TOTAL} tasks"
 
 # Setup 
+module load Python/3.12.3-GCCcore-13.3.0
+
 VENV_PATH="${VENV_PATH:-./.venv}"
 if [[ -f "${VENV_PATH}/bin/activate" ]]; then
     source "${VENV_PATH}/bin/activate"
@@ -73,7 +76,7 @@ for (( e_idx=0; e_idx < N_E; e_idx++ )); do
                 --output    "${OUTPUT_FILE}" \
             
             echo "Task ${TASK_ID} finished successfully."
-            (( TASK_ID++ ))
+            TASK_ID=$(( TASK_ID + 1 ))
         done
     done
 done
