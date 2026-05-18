@@ -3,8 +3,6 @@ from dataclasses import dataclass
 
 from qibo import Circuit
 from mpstab import HSMPO
-from mpstab.engines import QuimbEngine, StimEngine
-
 from mssim.engines.abstract import BenchmarkEngine
 
 

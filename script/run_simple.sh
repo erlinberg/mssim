@@ -23,6 +23,12 @@ fi
 N_QUBITS_LIST=($(jq -r '.sweep.n_qubits[]' "$SETTINGS"))
 DEPTH_LIST=($(jq -r '.sweep.depth[]' "$SETTINGS"))
 ENGINE_LIST=($(jq -r '.execution.engines[]' "$SETTINGS"))
+VERBOSE_OUTPUT=$(jq -r '.output.verbose // false' "$SETTINGS")
+
+if [[ "$VERBOSE_OUTPUT" == "false" ]]; then
+    export QIBO_LOG_LEVEL=3
+fi
+
 
 N_Q=${#N_QUBITS_LIST[@]}
 N_D=${#DEPTH_LIST[@]}
@@ -55,6 +61,7 @@ for (( e_idx=0; e_idx < N_E; e_idx++ )); do
             DEPTH="${DEPTH_LIST[$d_idx]}"
             ENGINE="${ENGINE_LIST[$e_idx]}"
             
+            echo
             echo "Task ${TASK_ID}: n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}"
             
             python main.py \
@@ -64,7 +71,6 @@ for (( e_idx=0; e_idx < N_E; e_idx++ )); do
                 --engine    "${ENGINE}"     \
                 --run_id    "${TASK_ID}"    \
                 --output    "${OUTPUT_FILE}" \
-                # "${EXTRA_ARGS[@]}"
             
             echo "Task ${TASK_ID} finished successfully."
             (( TASK_ID++ ))

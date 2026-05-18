@@ -29,7 +29,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%dT%H:%M:%S",
     stream=sys.stdout,
 )
-logger = logging.getLogger("floquet.main")
+logger = logging.getLogger("mssim.main")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -128,20 +128,23 @@ def main(argv: list[str] | None = None) -> None:
     circuit_kwargs: dict         = model_cfg.get("kwargs", {})
     circuit_kwargs["observable"] = observable
 
-    logger.info("Building circuit '%s' — n_qubits=%d, depth=%d", circuit_name, n_qubits, depth)
-    model = build_circuit(circuit_name, n_qubits=n_qubits, depth=depth, **circuit_kwargs)
-
     exec_cfg               = settings["execution"]
     engine_keys: list[str] = exec_cfg.get("engines", ["all"])
     max_bond: int | None   = exec_cfg.get("max_bond_dimension", None)
     n_runs: int            = exec_cfg.get("n_runs", 1)
 
-    logger.info("Building engines: %s (max_bond=%s)", engine_keys, max_bond)
-    engines = build_engines(engine_keys, max_bond_dimension=max_bond)
-
     out_cfg          = settings["output"]
+    verbose: bool  = out_cfg.get("verbose", False)
     output_file: str = out_cfg.get("filename", "results.jsonl")
     output_fmt: str  = out_cfg.get("format", "jsonl")
+    
+    if verbose: logger.info("Building circuit '%s' — n_qubits=%d, depth=%d", circuit_name, n_qubits, depth)
+    model = build_circuit(circuit_name, n_qubits=n_qubits, depth=depth, **circuit_kwargs)
+
+    if verbose: logger.info("Building engines: %s (max_bond=%s)", engine_keys, max_bond)
+    engines = build_engines(engine_keys, max_bond_dimension=max_bond)
+
+    if verbose: logger.info("Accessing output directory exists for file '%s'", output_file)
     os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
 
 
@@ -165,14 +168,12 @@ def main(argv: list[str] | None = None) -> None:
         output_fmt=output_fmt,
         extra_metadata=extra_metadata,
         skip_on_error=False,
-        verbose=True,
+        verbose=verbose,
     )
-    logger.info("Starting execution: %d engine(s) × %d run(s) → %s",len(engines), n_runs, output_file,)
+    if verbose: logger.info("Starting execution: %d engine(s) × %d run(s) → %s",len(engines), n_runs, output_file,)
     batch_results = exe.run(model, engines)
 
 
-    print("\n" + "=" * 72)
-    print(f"{'EXECUTION SUMMARY':^72}")
     print("=" * 72)
     
     for br in batch_results:
@@ -180,7 +181,7 @@ def main(argv: list[str] | None = None) -> None:
         s = br.summary()
         
         print(
-            f"\n  Engine : {s['engine']}\n"
+            f"  Engine : {s['engine']}\n"
             f"  Circuit: {s['circuit']}  n_qubits={s['n_qubits']}  depth={s['depth']}\n"
             f"  Runs   : {s['n_runs']}\n"
             f"  ⟨O⟩    : {s['expval_mean']:.6f} ± {s['expval_std']:.6f}\n"
@@ -191,9 +192,9 @@ def main(argv: list[str] | None = None) -> None:
         if "fidelity_mean" in s:
             print(f"  Fidelity: {s['fidelity_mean']:.6f} ± {s['fidelity_std']:.6f}")
     
-    print("=" * 72 + "\n")
+    print("=" * 72 )
 
-    logger.info("Done. Results written to '%s'.", output_file)
+    if verbose: logger.info("Done. Results written to '%s'.", output_file)
 
 
 if __name__ == "__main__":

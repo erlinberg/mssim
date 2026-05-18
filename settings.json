@@ -1,6 +1,6 @@
 {
   "model": {
-    "circuit": "kicked-ising",
+    "circuit": "ising",
     "n_qubits": 4,
     "depth": 1,
     "observable": "zzzz",
@@ -20,6 +20,7 @@
 
   "output": {
     "filename": "results/result.jsonl",
-    "format":   "jsonl"
+    "format":   "jsonl",
+    "verbose": false
   }
 }

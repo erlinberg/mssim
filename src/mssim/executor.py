@@ -87,7 +87,7 @@ class executor:
 
         for engine in engines:
 
-            logger.info("Starting engine '%s' for circuit '%s'.", engine.name, model.name)
+            if self.verbose: logger.info("Starting engine '%s' for circuit '%s'.", engine.name, model.name)
 
             rows: list[ResultRow] = []
             for run_id in range(self.n_runs):
@@ -127,7 +127,7 @@ class executor:
                 rows.append(row)
                 if self.output_file is not None: save_result(self.output_file, row, fmt=self.output_fmt)
             
-            logger.info("Finished engine '%s': %d/%d successful runs.",engine.name,len(rows),self.n_runs)
+            if self.verbose: logger.info("Finished engine '%s': %d/%d successful runs.",engine.name,len(rows),self.n_runs)
 
             batch_results.append(
                 BatchResult(
