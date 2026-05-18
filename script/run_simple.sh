@@ -41,7 +41,7 @@ fi
 echo "Sweep dimensions: n_qubits=${N_Q} × depth=${N_D} × engines=${N_E} = ${TOTAL} tasks"
 
 # Setup 
-VENV_PATH="${VENV_PATH:-${HOME}/Library/Caches/pypoetry/virtualenvs/mpstab-dxIrYW_j-py3.12}"
+VENV_PATH="${VENV_PATH:-./.venv}"
 if [[ -f "${VENV_PATH}/bin/activate" ]]; then
     source "${VENV_PATH}/bin/activate"
 fi
