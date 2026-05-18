@@ -8,8 +8,6 @@ module load jq/1.6-GCCcore-12.2.0
 
 # Parse arguments
 SETTINGS="${1:?Usage: bash run_simple.sh <settings.json>}"
-# shift                           # remaining args forwarded to main.py
-# EXTRA_ARGS=("$@")
 
 if [[ ! -f "$SETTINGS" ]]; then
     echo "ERROR: settings file not found: $SETTINGS" >&2
