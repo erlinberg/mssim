@@ -20,7 +20,7 @@ mssim/
 │   ├── circuits/
 │   │   ├── __init__.py
 │   │   ├── model.py                 # CircuitModel dataclass
-│   │   └── library.py               # Circuit builders (Ising, QAOA, Random, etc.)
+│   │   └── library.py               # Circuit builders (ising, kicked-ising, hardware_efficient, etc.)
 │   └── engines/
 │       ├── __init__.py
 │       ├── abstract.py              # BenchmarkEngine base class
@@ -106,7 +106,7 @@ pip install -e .
 ```json
 {
   "model": {
-    "circuit": "random_clifford",
+    "circuit": "kicked-ising",
     "n_qubits": 8,
     "depth": 4,
     "observable": ["ZZXZXXYY"],
