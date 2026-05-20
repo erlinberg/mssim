@@ -67,6 +67,7 @@ dependencies = [
     "typing_extensions==4.15.0",
     "zipp==3.23.0",
     "mpstab @ ../mpstab",
+    "pauli-prop>=0.2.0",
 ]
 
 [build-system]
