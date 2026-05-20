@@ -5,19 +5,22 @@ from mssim.engines.abstract import BenchmarkEngine
 from mssim.engines.quimb import QuimbEngine
 from mssim.engines.mpstab import MPStabEngine
 from mssim.engines.qiskit import QiskitEngine
+from mssim.engines.paulipropagation import QiskitPauliPropagationEngine
 
 ENGINES = {
     "quimb": QuimbEngine,
     "mpstab": MPStabEngine,
     "qiskit": QiskitEngine,
+    "qiskit_paulipropagation": QiskitPauliPropagationEngine,
 }
+
 
 def build_engines(
     keys: list[str],
     max_bond_dimension: int | None = None,
     **extra_kwargs: Any,
 ) -> list[BenchmarkEngine]:
-    
+
     if keys == ["all"]:
         keys = list(ENGINES.keys())
 
