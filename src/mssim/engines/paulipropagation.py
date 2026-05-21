@@ -12,7 +12,7 @@ from .abstract import BenchmarkEngine
 class QiskitPauliPropagationEngine(BenchmarkEngine):
     evolution: str = "h"  # s for Schrödinger and h for Heisenberg
     atol: float = (
-        1e-12  # Threshold to drop Pauli strings with lover coefficient that this
+        1e-12  # Threshold to drop Pauli strings with lower coefficient than this are discarded
     )
 
     def expectation_value(
@@ -37,7 +37,7 @@ class QiskitPauliPropagationEngine(BenchmarkEngine):
         propagated_obs = propagate_through_circuit(
             qiskit_observable,
             non_cliff,
-            max_terms=self.max_terms,
+            max_terms=max_terms,
             atol=self.atol,
             frame=self.evolution,
         )[0]
