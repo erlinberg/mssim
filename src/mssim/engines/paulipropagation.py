@@ -11,15 +11,12 @@ from .abstract import BenchmarkEngine
 @dataclass
 class QiskitPauliPropagationEngine(BenchmarkEngine):
     evolution: str = "h"  # s for Schrödinger and h for Heisenberg
-    max_terms: int = 2
     atol: float = (
         1e-12  # Threshold to drop Pauli strings with lover coefficient that this
     )
 
     def expectation_value(
-        self,
-        qasm_circuit: str,
-        observable: Sequence[str],
+        self, qasm_circuit: str, observable: Sequence[str], max_terms: int = 100_000
     ) -> tuple[float, float, float | None]:
 
         qiskit_circuit = QuantumCircuit.from_qasm_str(qasm_circuit)
@@ -30,11 +27,11 @@ class QiskitPauliPropagationEngine(BenchmarkEngine):
         #     basis_gates=["rx", "ry", "rz", "measure", "cx"],
         # )
 
-        cliff, non_cliff = evolve_through_cliffords(qiskit_circuit)
-
         qiskit_observable = SparsePauliOp(observable.upper())
 
         t0 = time.perf_counter()
+
+        cliff, non_cliff = evolve_through_cliffords(qiskit_circuit)
 
         # Evolve the non_cliff terms
         propagated_obs = propagate_through_circuit(
