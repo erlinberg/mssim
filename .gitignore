@@ -3,3 +3,5 @@
 *.egg-info
 .DS_Store
 logs/
+results/
+script/run_simple.sh

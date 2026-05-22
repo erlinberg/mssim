@@ -1,9 +1,6 @@
 {
   "model": {
     "circuit": "cme",
-    "n_qubits": 5,
-    "depth": 1,
-    "observable": "zzzz",
     "kwargs": {
       "K": 3,
       "M": 0.5
@@ -17,8 +14,8 @@
   },
 
   "sweep": {
-    "n_qubits": [4],
-    "depth":    [1]
+    "n_qubits": [10,20,30],
+    "depth":    [1,2,3]
   },
 
   "output": {

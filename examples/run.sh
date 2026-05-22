@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
-
-# Usage:
-#   bash run_simple.sh <settings.json> [extra_python_args...]
-
+# Usage: bash run_simple.sh <settings.json> [extra_python_args...]
 set -euo pipefail
-module load jq/1.6-GCCcore-12.2.0
 
-# Parse arguments
+
+# !!! SPECIFY YOUR ENVIRONMENT PATH !!!
+VENV_PATH="${VENV_PATH:-./.venv}"
+
+
+# CHECK jq is installed
+if ! command -v jq &>/dev/null; then
+    echo "ERROR: 'jq' is required but not found in PATH." >&2
+    exit 1
+fi
+
+
+# Read settings
 SETTINGS="${1:?Usage: bash run_simple.sh <settings.json>}"
-
 if [[ ! -f "$SETTINGS" ]]; then
     echo "ERROR: settings file not found: $SETTINGS" >&2
     exit 1
 fi
 
-# Read sweep parameters from JSON
-if ! command -v jq &>/dev/null; then
-    echo "ERROR: 'jq' is required but not found in PATH." >&2
-    exit 1
-fi
 N_QUBITS_LIST=($(jq -r '.sweep.n_qubits[]' "$SETTINGS"))
 DEPTH_LIST=($(jq -r '.sweep.depth[]' "$SETTINGS"))
 ENGINE_LIST=($(jq -r '.execution.engines[]' "$SETTINGS"))
@@ -27,7 +29,6 @@ VERBOSE_OUTPUT=$(jq -r '.output.verbose // false' "$SETTINGS")
 if [[ "$VERBOSE_OUTPUT" == "false" ]]; then
     export QIBO_LOG_LEVEL=3
 fi
-
 
 N_Q=${#N_QUBITS_LIST[@]}
 N_D=${#DEPTH_LIST[@]}
@@ -39,10 +40,8 @@ if [[ "$TOTAL" -eq 0 ]]; then
 fi
 echo "Sweep dimensions: n_qubits=${N_Q} × depth=${N_D} × engines=${N_E} = ${TOTAL} tasks"
 
-# Setup 
-module load Python/3.12.3-GCCcore-13.3.0
 
-VENV_PATH="${VENV_PATH:-./.venv}"
+# Setup venv and output dir
 if [[ -f "${VENV_PATH}/bin/activate" ]]; then
     source "${VENV_PATH}/bin/activate"
 fi
@@ -52,6 +51,7 @@ OUTPUT_FMT="$(jq -r '.output.format // "jsonl"' "$SETTINGS")"
 OUTPUT_BASE="$(jq -r '.output.filename | split("/")[-1] | split(".")[0]' "$SETTINGS")"
 OUTPUT_FILE="${OUTPUT_DIR}/${OUTPUT_BASE}.${OUTPUT_FMT}"
 mkdir -p "${OUTPUT_DIR}"
+
 
 # Run all tasks sequentially
 TASK_ID=0
