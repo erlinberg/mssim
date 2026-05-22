@@ -44,7 +44,6 @@ def _uniform_sampler(n: int) -> Callable[[], list[float]]:
     """Return a sampler of *n* angles drawn uniformly from [0, 2π)."""
     return lambda: list(np.random.uniform(0.0, 2 * np.pi, size=n))
 
-
 def _parameter_placeholder(index: int) -> str:
     return f"__PARAM_{index}__"
 
@@ -191,7 +190,6 @@ def build_ising(
         metadata={"J": J, "h": h, "dt": dt},
     )
 
-
 def build_random_rx(
     n_qubits: int,
     depth: int,
@@ -221,7 +219,6 @@ def build_random_rx(
         parameter_sampler=_uniform_sampler(n_params),
         metadata={"rotation": "rx"},
     )
-
 
 def build_qaoa(
     n_qubits: int,
@@ -313,6 +310,107 @@ def build_hardware_efficient(
         metadata={"entangler": "cz"},
     )
 
+def build_cme(
+    n_qubits: int,
+    depth: int,
+    M: float = 0.0,
+    K: int = 1,
+    observable: str | None = None,
+    **kwargs: Any,
+) -> CircuitModel:
+    """
+    Controlled magic & entanglement circuit. Each layer has:     
+        
+    A layer of single-qubit RX rotations. A fraction `M` of the total RX
+    rotations are parametric (non-Clifford), while the rest are fixed to
+    random Clifford angles (multiples of π/2).
+
+    A CNOT ladder structure controlled by `K`. For each qubit `i`, CNOTs 
+    are applied to targets `j = i + d` for distances `d` from `n_qubits - 1`
+    down to `n_qubits - K`. Producing ∑{i=1}^{k-1} i = k(k-1)/2 entangling 
+    Clifford gates per layer.
+
+        Example: m=0.4; k=3
+        
+        R_c---●-----●--------●--------
+        R_m---|-----|--●-----|--●-----
+        R_m---|-----|--|-----X--|--●--
+        R_c---|-----X--|--------X--|--
+        R_c---X--------X-----------X--
+        ______________________________
+              1       2         3 
+            
+    Parameters
+    ----------
+    n_qubits:
+        Number of qubits.
+    depth:
+        Number of layers.
+    M:
+        Fraction of RX rotations that are parametric (0.0 to 1.0).
+    K:
+        Determines the connectivity of the CNOT ladder. Must be between 1 and n_qubits-1.
+    observable:
+        Defaults to all-Z.
+    """
+    if observable is None:
+        observable = "Z" * n_qubits
+
+    if not (1 <= K < n_qubits):
+        raise ValueError(f"K must be in [1, n_qubits-1], but got K={K} for n_qubits={n_qubits}")
+
+    lines = [_qasm_header(n_qubits)]
+    
+    total_rx_gates = n_qubits * depth
+    n_params = int(M * total_rx_gates)
+    
+    # Generate indices for all RX gates and shuffle them to randomize parametric positions
+    all_rx_indices = np.arange(total_rx_gates)
+    np.random.shuffle(all_rx_indices)
+    
+    parametric_indices = set(all_rx_indices[:n_params])
+    
+    # Fixed Clifford angles for non-parametric gates
+    clifford_angles = [0.0, np.pi / 2, np.pi, 3 * np.pi / 2]
+    fixed_angles = np.random.choice(clifford_angles, size=total_rx_gates - n_params)
+    
+    param_idx = 0
+    fixed_angle_idx = 0
+    rx_counter = 0
+
+    for _ in range(depth):
+        # Layer RX
+        for i in range(n_qubits):
+            if rx_counter in parametric_indices:
+                angle_str = _parameter_placeholder(param_idx)
+                param_idx += 1
+            else:
+                angle = fixed_angles[fixed_angle_idx]
+                angle_str = f"{angle:.6f}"
+                fixed_angle_idx += 1
+            
+            lines.append(f"rx({angle_str}) q[{i}];")
+            rx_counter += 1
+            
+        # Layer CNOT
+        for distance in range(n_qubits - 1, n_qubits - K - 1, -1):
+            if distance <= 0:
+                continue
+            for i in range(n_qubits - distance):
+                j = i + distance
+                lines.append(f"cx q[{i}], q[{j}];")
+
+    return CircuitModel(
+        name="cme",
+        n_qubits=n_qubits,
+        depth=depth,
+        qasm="\n".join(lines),
+        observable=observable,
+        n_params=n_params,
+        parameter_sampler=_uniform_sampler(n_params),
+        metadata={"M": M, "K": K},
+    )
+
 
 CIRCUIT_REGISTRY: dict[str, Any] = {
     "kicked-ising":       build_kicked_ising,
@@ -320,6 +418,7 @@ CIRCUIT_REGISTRY: dict[str, Any] = {
     "random_rx":          build_random_rx,
     "qaoa":               build_qaoa,
     "hardware_efficient": build_hardware_efficient,
+    "cme":                build_cme
 }
 
 def build_circuit(
