@@ -51,6 +51,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Circuit depth (overrides settings).",
     )
     p.add_argument(
+        "--observable", type=str, default=None,
+        help="Observable string such as 'ZIII' (overrides settings).",
+    )
+    p.add_argument(
         "--engine", type=str, default=None,
         help="Comma-separated engine keys, e.g. 'tn,sv' or 'all' (overrides settings).",
     )
@@ -95,6 +99,8 @@ def merge_args(settings: dict, args: argparse.Namespace) -> dict:
         cfg["model"]["n_qubits"] = args.n_qubits
     if args.depth is not None:
         cfg["model"]["depth"] = args.depth
+    if args.observable is not None:
+        cfg["model"]["observable"] = args.observable
     if args.engine is not None:
         cfg["execution"]["engines"] = args.engine.split(",")
     if args.n_runs is not None:

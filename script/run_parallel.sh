@@ -4,7 +4,8 @@
 #   sbatch run_parallel.sh <settings.json>
 #
 # The script reads the "sweep" block of the settings JSON and creates one
-# SLURM array task per combination of (n_qubits × depth × engine).
+# SLURM array task per combination of (n_qubits × depth × engine), or per
+# qubit-specific magnetization observable when model.observable == "magnetization".
 
 #SBATCH --job-name=mssim
 #SBATCH --output=logs/mssim_%A_%a.out     # %A = job id, %a = array task id
@@ -30,6 +31,7 @@ fi
 N_QUBITS_LIST=($(jq -r '.sweep.n_qubits[]' "$SETTINGS"))
 DEPTH_LIST=($(jq -r '.sweep.depth[]' "$SETTINGS"))
 ENGINE_LIST=($(jq -r '.execution.engines[]' "$SETTINGS"))
+OBSERVABLE_MODE=$(jq -r '.model.observable // ""' "$SETTINGS")
 VERBOSE_OUTPUT=$(jq -r '.output.verbose // false' "$SETTINGS")
 
 if [[ "$VERBOSE_OUTPUT" == "false" ]]; then
@@ -39,17 +41,36 @@ fi
 N_Q=${#N_QUBITS_LIST[@]}
 N_D=${#DEPTH_LIST[@]}
 N_E=${#ENGINE_LIST[@]}
-TOTAL=$(( N_Q * N_D * N_E ))
+
+TASKS=()
+for N_QUBITS in "${N_QUBITS_LIST[@]}"; do
+    for DEPTH in "${DEPTH_LIST[@]}"; do
+        for ENGINE in "${ENGINE_LIST[@]}"; do
+            if [[ "$OBSERVABLE_MODE" == "magnetization" ]]; then
+                # Build one task per qubit: observable_i = I...IZI...I
+                for (( O_IDX=0; O_IDX < N_QUBITS; O_IDX++ )); do
+                    OBSERVABLE=$(printf '%*s' "$N_QUBITS" '' | tr ' ' 'I')
+                    OBSERVABLE="${OBSERVABLE:0:O_IDX}Z${OBSERVABLE:O_IDX+1}"
+                    TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${OBSERVABLE}")
+                done
+            else
+                TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${OBSERVABLE_MODE}")
+            fi
+        done
+    done
+done
+
+TOTAL=${#TASKS[@]}
 
 if [[ "$TOTAL" -eq 0 ]]; then
-    echo "ERROR: sweep produces zero tasks. Check sweep.n_qubits, sweep.depth, and execution.engines in $SETTINGS." >&2
+    echo "ERROR: sweep produces zero tasks. Check sweep.n_qubits, sweep.depth, execution.engines, and model.observable in $SETTINGS." >&2
     exit 1
 fi
 
 # 3. If NOT inside a SLURM array job, submit the array
 if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     mkdir -p logs
-    echo "Sweep dimensions: n_qubits=${N_Q} × depth=${N_D} × engines=${N_E} = ${TOTAL} tasks"
+    echo "Sweep dimensions: ${TOTAL} tasks"
     sbatch --array="0-$(( TOTAL - 1 ))" "$0" "$SETTINGS" "${EXTRA_ARGS[@]}"
     exit 0
 fi
@@ -57,17 +78,9 @@ fi
 # 4. Inside SLURM array task: compute specific parameters
 TASK_ID="${SLURM_ARRAY_TASK_ID}"
 
-# Index mapping matching the nested loop order of run_simple.sh
-E_IDX=$(( TASK_ID / (N_Q * N_D) ))
-REMAINDER=$(( TASK_ID % (N_Q * N_D) ))
-D_IDX=$(( REMAINDER / N_Q ))
-Q_IDX=$(( REMAINDER % N_Q ))
+IFS='|' read -r N_QUBITS DEPTH ENGINE OBSERVABLE <<< "${TASKS[$TASK_ID]}"
 
-N_QUBITS="${N_QUBITS_LIST[$Q_IDX]}"
-DEPTH="${DEPTH_LIST[$D_IDX]}"
-ENGINE="${ENGINE_LIST[$E_IDX]}"
-
-echo "Task ${TASK_ID}: n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}"
+echo "Task ${TASK_ID}: n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}, observable=${OBSERVABLE}"
 
 # 5. Environment Setup (Python & Environment)
 module load Python/3.12.3-GCCcore-13.3.0
@@ -85,12 +98,19 @@ OUTPUT_FILE="${OUTPUT_DIR}/${OUTPUT_BASE}.${OUTPUT_FMT}"
 mkdir -p "${OUTPUT_DIR}"
 
 # 7. Execution
-python main.py \
-    --settings  "${SETTINGS}"   \
-    --n_qubits  "${N_QUBITS}"   \
-    --depth     "${DEPTH}"      \
-    --engine    "${ENGINE}"     \
-    --run_id    "${TASK_ID}"    \
-    --output    "${OUTPUT_FILE}" \
+MAIN_ARGS=(
+    --settings "${SETTINGS}"
+    --n_qubits "${N_QUBITS}"
+    --depth "${DEPTH}"
+    --engine "${ENGINE}"
+    --run_id "${TASK_ID}"
+    --output "${OUTPUT_FILE}"
+)
+
+if [[ -n "${OBSERVABLE}" ]]; then
+    MAIN_ARGS+=(--observable "${OBSERVABLE}")
+fi
+
+python main.py "${MAIN_ARGS[@]}"
 
 echo "Task ${TASK_ID} finished successfully."
