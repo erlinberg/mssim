@@ -4,15 +4,16 @@
 #   sbatch run_parallel.sh <settings.json>
 #
 # The script reads the "sweep" block of the settings JSON and creates one
-# SLURM array task per combination of (n_qubits × depth × engine), or per
-# qubit-specific magnetization observable when model.observable == "magnetization".
+# SLURM array task per combination of (n_qubits × depth × engine × max_bond_dimension
+# × max_terms), or per qubit-specific magnetization observable when
+# model.observable == "magnetization".
 
 #SBATCH --job-name=mssim
 #SBATCH --output=logs/mssim_%A_%a.out     # %A = job id, %a = array task id
 #SBATCH --error=logs/mssim_%A_%a.err
-#SBATCH --time=00:30:00                   # ⚠ wall-clock limit per task
-#SBATCH --mem=8G                          # ⚠ memory per task
-#SBATCH --cpus-per-task=4                 # ⚠ CPUs per task
+#SBATCH --time=00:30:00                   # wall-clock limit per task
+#SBATCH --mem=200M                        # memory per task
+#SBATCH --cpus-per-task=1                 # CPUs per task
 
 set -euo pipefail
 
@@ -21,6 +22,7 @@ module load jq/1.6-GCCcore-12.2.0
 
 # Parse arguments
 SETTINGS="${1:?Usage: sbatch run_parallel.sh <settings.json>}"
+EXTRA_ARGS=("${@:2}")
 
 if [[ ! -f "$SETTINGS" ]]; then
     echo "ERROR: settings file not found: $SETTINGS" >&2
@@ -28,9 +30,11 @@ if [[ ! -f "$SETTINGS" ]]; then
 fi
 
 # 2. Read sweep parameters using the new array syntax
-N_QUBITS_LIST=($(jq -r '.sweep.n_qubits[]' "$SETTINGS"))
-DEPTH_LIST=($(jq -r '.sweep.depth[]' "$SETTINGS"))
-ENGINE_LIST=($(jq -r '.execution.engines[]' "$SETTINGS"))
+mapfile -t N_QUBITS_LIST < <(jq -r '.sweep.n_qubits[]' "$SETTINGS")
+mapfile -t DEPTH_LIST < <(jq -r '.sweep.depth[]' "$SETTINGS")
+mapfile -t ENGINE_LIST < <(jq -r '.execution.engines[]' "$SETTINGS")
+mapfile -t MAX_BOND_LIST < <(jq -r '(.sweep.max_bond_dimension // [.execution.max_bond_dimension] // [null])[]' "$SETTINGS")
+mapfile -t MAX_TERMS_LIST < <(jq -r '(.sweep.max_terms // [.execution.max_terms] // [null])[]' "$SETTINGS")
 OBSERVABLE_MODE=$(jq -r '.model.observable // ""' "$SETTINGS")
 VERBOSE_OUTPUT=$(jq -r '.output.verbose // false' "$SETTINGS")
 
@@ -41,21 +45,27 @@ fi
 N_Q=${#N_QUBITS_LIST[@]}
 N_D=${#DEPTH_LIST[@]}
 N_E=${#ENGINE_LIST[@]}
+N_B=${#MAX_BOND_LIST[@]}
+N_T=${#MAX_TERMS_LIST[@]}
 
 TASKS=()
 for N_QUBITS in "${N_QUBITS_LIST[@]}"; do
     for DEPTH in "${DEPTH_LIST[@]}"; do
         for ENGINE in "${ENGINE_LIST[@]}"; do
-            if [[ "$OBSERVABLE_MODE" == "magnetization" ]]; then
-                # Build one task per qubit: observable_i = I...IZI...I
-                for (( O_IDX=0; O_IDX < N_QUBITS; O_IDX++ )); do
-                    OBSERVABLE=$(printf '%*s' "$N_QUBITS" '' | tr ' ' 'I')
-                    OBSERVABLE="${OBSERVABLE:0:O_IDX}Z${OBSERVABLE:O_IDX+1}"
-                    TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${OBSERVABLE}")
+            for MAX_BOND in "${MAX_BOND_LIST[@]}"; do
+                for MAX_TERMS in "${MAX_TERMS_LIST[@]}"; do
+                    if [[ "$OBSERVABLE_MODE" == "magnetization" ]]; then
+                        # Build one task per qubit: observable_i = I...IZI...I
+                        for (( O_IDX=0; O_IDX < N_QUBITS; O_IDX++ )); do
+                            OBSERVABLE=$(printf '%*s' "$N_QUBITS" '' | tr ' ' 'I')
+                            OBSERVABLE="${OBSERVABLE:0:O_IDX}Z${OBSERVABLE:O_IDX+1}"
+                            TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE}")
+                        done
+                    else
+                        TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE_MODE}")
+                    fi
                 done
-            else
-                TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${OBSERVABLE_MODE}")
-            fi
+            done
         done
     done
 done
@@ -63,7 +73,7 @@ done
 TOTAL=${#TASKS[@]}
 
 if [[ "$TOTAL" -eq 0 ]]; then
-    echo "ERROR: sweep produces zero tasks. Check sweep.n_qubits, sweep.depth, execution.engines, and model.observable in $SETTINGS." >&2
+    echo "ERROR: sweep produces zero tasks. Check sweep.n_qubits, sweep.depth, sweep.max_bond_dimension, sweep.max_terms, execution.engines, and model.observable in $SETTINGS." >&2
     exit 1
 fi
 
@@ -78,9 +88,9 @@ fi
 # 4. Inside SLURM array task: compute specific parameters
 TASK_ID="${SLURM_ARRAY_TASK_ID}"
 
-IFS='|' read -r N_QUBITS DEPTH ENGINE OBSERVABLE <<< "${TASKS[$TASK_ID]}"
+IFS='|' read -r N_QUBITS DEPTH ENGINE MAX_BOND MAX_TERMS OBSERVABLE <<< "${TASKS[$TASK_ID]}"
 
-echo "Task ${TASK_ID}: n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}, observable=${OBSERVABLE}"
+echo "Task ${TASK_ID}: n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}, max_bond=${MAX_BOND}, max_terms=${MAX_TERMS}, observable=${OBSERVABLE}"
 
 # 5. Environment Setup (Python & Environment)
 module load Python/3.12.3-GCCcore-13.3.0
@@ -106,6 +116,14 @@ MAIN_ARGS=(
     --run_id "${TASK_ID}"
     --output "${OUTPUT_FILE}"
 )
+
+if [[ -n "${MAX_BOND}" && "${MAX_BOND}" != "null" ]]; then
+    MAIN_ARGS+=(--max_bond "${MAX_BOND}")
+fi
+
+if [[ -n "${MAX_TERMS}" && "${MAX_TERMS}" != "null" ]]; then
+    MAIN_ARGS+=(--max_terms "${MAX_TERMS}")
+fi
 
 if [[ -n "${OBSERVABLE}" ]]; then
     MAIN_ARGS+=(--observable "${OBSERVABLE}")

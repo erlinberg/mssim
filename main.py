@@ -93,6 +93,7 @@ def merge_args(settings: dict, args: argparse.Namespace) -> dict:
     cfg = dict(settings)            # shallow copy to ensure the format is correct
     cfg.setdefault("model", {})     # prevent errors in case of misconfiguration
     cfg.setdefault("execution", {})
+    cfg.setdefault("sweep", {})
     cfg.setdefault("output", {})
     
     if args.n_qubits is not None:
@@ -107,8 +108,12 @@ def merge_args(settings: dict, args: argparse.Namespace) -> dict:
         cfg["execution"]["n_runs"] = args.n_runs
     if args.max_bond is not None:
         cfg["execution"]["max_bond_dimension"] = args.max_bond
+    elif cfg["execution"].get("max_bond_dimension") is None and cfg["sweep"].get("max_bond_dimension") is not None:
+        cfg["execution"]["max_bond_dimension"] = cfg["sweep"]["max_bond_dimension"]
     if args.max_terms is not None:
         cfg["execution"]["max_terms"] = args.max_terms
+    elif cfg["execution"].get("max_terms") is None and cfg["sweep"].get("max_terms") is not None:
+        cfg["execution"]["max_terms"] = cfg["sweep"]["max_terms"]
     if args.output is not None:
         cfg["output"]["filename"] = args.output
 
