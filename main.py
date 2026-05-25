@@ -63,6 +63,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Maximum MPS bond dimension (overrides settings).",
     )
     p.add_argument(
+        "--max_terms", type=int, default=None,
+        help="Maximum number of terms for Pauli propagation (overrides settings).",
+    )
+    p.add_argument(
         "--run_id", type=int, default=0,
         help="SLURM array task ID, embedded in metadata.",
     )
@@ -97,6 +101,8 @@ def merge_args(settings: dict, args: argparse.Namespace) -> dict:
         cfg["execution"]["n_runs"] = args.n_runs
     if args.max_bond is not None:
         cfg["execution"]["max_bond_dimension"] = args.max_bond
+    if args.max_terms is not None:
+        cfg["execution"]["max_terms"] = args.max_terms
     if args.output is not None:
         cfg["output"]["filename"] = args.output
 
@@ -131,6 +137,7 @@ def main(argv: list[str] | None = None) -> None:
     exec_cfg               = settings["execution"]
     engine_keys: list[str] = exec_cfg.get("engines", ["all"])
     max_bond: int | None   = exec_cfg.get("max_bond_dimension", None)
+    max_terms: int | None  = exec_cfg.get("max_terms", None)
     n_runs: int            = exec_cfg.get("n_runs", 1)
 
     out_cfg          = settings["output"]
@@ -141,8 +148,12 @@ def main(argv: list[str] | None = None) -> None:
     if verbose: logger.info("Building circuit '%s' — n_qubits=%d, depth=%d", circuit_name, n_qubits, depth)
     model = build_circuit(circuit_name, n_qubits=n_qubits, depth=depth, **circuit_kwargs)
 
-    if verbose: logger.info("Building engines: %s (max_bond=%s)", engine_keys, max_bond)
-    engines = build_engines(engine_keys, max_bond_dimension=max_bond)
+    if verbose: logger.info("Building engines: %s (max_bond=%s, max_terms=%s)", engine_keys, max_bond, max_terms)
+    engines = build_engines(
+        engine_keys,
+        max_bond_dimension=max_bond,
+        max_terms=max_terms,
+    )
 
     if verbose: logger.info("Accessing output directory exists for file '%s'", output_file)
     os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)

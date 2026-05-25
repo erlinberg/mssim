@@ -18,6 +18,7 @@ ENGINES = {
 def build_engines(
     keys: list[str],
     max_bond_dimension: int | None = None,
+    max_terms: int | None = None,
     **extra_kwargs: Any,
 ) -> list[BenchmarkEngine]:
 
@@ -30,6 +31,8 @@ def build_engines(
         cls = ENGINES[k]
         if k in ["quimb", "mpstab"] and max_bond_dimension is not None:
             instances.append(cls(max_bond_dimension=max_bond_dimension, **extra_kwargs))
+        elif k == "qiskit_paulipropagation" and max_terms is not None:
+            instances.append(cls(max_terms=max_terms, **extra_kwargs))
         else:
             instances.append(cls(**extra_kwargs))
 
