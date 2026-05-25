@@ -52,10 +52,23 @@ TASKS=()
 for N_QUBITS in "${N_QUBITS_LIST[@]}"; do
     for DEPTH in "${DEPTH_LIST[@]}"; do
         for ENGINE in "${ENGINE_LIST[@]}"; do
-            for MAX_BOND in "${MAX_BOND_LIST[@]}"; do
-                for MAX_TERMS in "${MAX_TERMS_LIST[@]}"; do
+            MAX_BOND_VALUES=(null)
+            MAX_TERMS_VALUES=(null)
+
+            case "$ENGINE" in
+                *quimb*|*mpstab*)
+                    MAX_BOND_VALUES=("${MAX_BOND_LIST[@]}")
+                    ;;
+                *qiskit_paulipropagation*)
+                    MAX_TERMS_VALUES=("${MAX_TERMS_LIST[@]}")
+                    ;;
+                *)
+                    ;;
+            esac
+
+            for MAX_BOND in "${MAX_BOND_VALUES[@]}"; do
+                for MAX_TERMS in "${MAX_TERMS_VALUES[@]}"; do
                     if [[ "$OBSERVABLE_MODE" == "magnetization" ]]; then
-                        # Build one task per qubit: observable_i = I...IZI...I
                         for (( O_IDX=0; O_IDX < N_QUBITS; O_IDX++ )); do
                             OBSERVABLE=$(printf '%*s' "$N_QUBITS" '' | tr ' ' 'I')
                             OBSERVABLE="${OBSERVABLE:0:O_IDX}Z${OBSERVABLE:O_IDX+1}"
