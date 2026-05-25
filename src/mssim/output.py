@@ -75,6 +75,8 @@ class ResultRow:
     circuit: str
     n_qubits: int
     depth: int
+    max_bond_dimension: int | None
+    max_terms : int | None
     n_params: int
     parameters: list[float]
     observable: list[str]

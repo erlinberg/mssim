@@ -30,6 +30,6 @@ class MPStabEngine(BenchmarkEngine):
 
     @property
     def name(self) -> str:
-        return f"mpstab(chi={self.max_bond_dimension})"
+        return f"mpstab"
 
         

@@ -45,4 +45,4 @@ class QiskitPauliPropagationEngine(BenchmarkEngine):
 
     @property
     def name(self) -> str:
-        return f"Pauli Propagation (Qiskit version)"
+        return f"pauliprop"

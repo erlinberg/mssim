@@ -116,6 +116,8 @@ class executor:
                     circuit=model.name,
                     n_qubits=model.n_qubits,
                     depth=model.depth,
+                    max_bond_dimension=int(engine.max_bond_dimension) if hasattr(engine, "max_bond_dimension") else None,
+                    max_terms=int(engine.max_terms) if hasattr(engine, "max_terms") else None,
                     n_params=model.n_params,
                     parameters=params,
                     observable=list(observable),

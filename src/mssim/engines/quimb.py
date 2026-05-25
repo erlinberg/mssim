@@ -119,4 +119,4 @@ class QuimbEngine(BenchmarkEngine):
 
     @property
     def name(self) -> str:
-        return f"quimb_mps(chi={self.max_bond_dimension})"
+        return f"quimb"
