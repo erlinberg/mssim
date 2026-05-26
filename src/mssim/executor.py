@@ -20,7 +20,7 @@ from typing import Any
 from .circuits.model import CircuitModel
 from .engines.abstract import BenchmarkEngine
 from .output import BatchResult, ResultRow, save_result
-
+from .engines.qiskit import QiskitEngine
 logger = logging.getLogger(__name__)
 
 
@@ -128,6 +128,8 @@ class executor:
                 )
                 rows.append(row)
                 if self.output_file is not None: save_result(self.output_file, row, fmt=self.output_fmt)
+
+                if isinstance(engine, QiskitEngine): break # not collecting statistics on deterministic statevector simulation
             
             if self.verbose: logger.info("Finished engine '%s': %d/%d successful runs.",engine.name,len(rows),self.n_runs)
 
