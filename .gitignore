@@ -6,3 +6,5 @@ logs/
 results/
 script/run_simple.sh
 uv.lock
+*.txt
+*.json
