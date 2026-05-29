@@ -8,7 +8,7 @@ module alongside it so the shared helpers in :mod:`mssim.plots.general` and
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,6 +35,28 @@ _MAG_GROUP_COLS = [
 _MERGE_KEYS = ["circuit", "n_qubits", "depth", "run_id", "J", "h", "b"]
 
 
+def _apply_hue_exclusion(
+    data: pd.DataFrame,
+    hue_param: str | None,
+    exclude_hue_value: object | Sequence[object] | None,
+) -> pd.DataFrame:
+    """Drop one hue bucket before plotting when requested."""
+    if hue_param is None or exclude_hue_value is None or hue_param not in data.columns:
+        return data
+
+    if isinstance(exclude_hue_value, Sequence) and not isinstance(exclude_hue_value, (str, bytes)):
+        excluded_values = list(exclude_hue_value)
+    else:
+        excluded_values = [exclude_hue_value]
+
+    filtered = data[~data[hue_param].isin(excluded_values)].copy()
+    if filtered.empty:
+        raise ValueError(
+            f"No data left after excluding hue value(s) {excluded_values!r} from '{hue_param}'."
+        )
+    return filtered
+
+
 def magnetization(df: pd.DataFrame, *, inspect: bool = False) -> pd.DataFrame:
     """Compute one magnetization value per run by averaging expectation values."""
     if inspect:
@@ -55,6 +77,7 @@ def plot_magnetization(
     x_axis: str,
     *,
     hue_param: str | None = None,
+    exclude_hue_value: object | Sequence[object] | None = None,
     engines: str | Sequence[str] | None = None,
     max_bond_dimension: float | None = None,
     max_terms: float | None = None,
@@ -72,6 +95,8 @@ def plot_magnetization(
         Column for the x-axis.
     hue_param:
         Optional column used to split curves within each engine.
+    exclude_hue_value:
+        Optional hue value to remove before plotting, reducing the number of curves.
     engines:
         Engine names to include; `None` means all present.
     output_file:
@@ -82,8 +107,9 @@ def plot_magnetization(
     """
     engines = resolve_engines(mag_df, engines, exclude_qiskit=False)
     combined = build_combined(mag_df, engines, common_fixed, max_bond_dimension, max_terms)
+    combined = _apply_hue_exclusion(combined, hue_param, exclude_hue_value)
 
-    hue_values = sorted(combined[hue_param].unique().tolist()) if hue_param else None
+    hue_values = sorted(combined[hue_param].dropna().unique().tolist()) if hue_param else None
     palette = sns.color_palette("tab10", len(hue_values)) if hue_values else None
 
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -115,6 +141,7 @@ def plot_magnetization_diff(
     x_axis: str,
     *,
     hue_param: str | None = None,
+    exclude_hue_value: object | Sequence[object] | None = None,
     engines: str | Sequence[str] | None = None,
     max_bond_dimension: float | None = None,
     max_terms: float | None = None,
@@ -130,6 +157,7 @@ def plot_magnetization_diff(
     combined = build_combined(
         mag_df, [*engines, "qiskit"], common_fixed, max_bond_dimension, max_terms
     )
+    combined = _apply_hue_exclusion(combined, hue_param, exclude_hue_value)
 
     df_ref = combined[combined["engine"] == "qiskit"]
     df_approx = combined[combined["engine"].isin(engines)]
@@ -148,7 +176,7 @@ def plot_magnetization_diff(
         merged["magnetization"] - merged["magnetization_qiskit"]
     ).abs()
 
-    hue_values = sorted(merged[hue_param].unique().tolist()) if hue_param else None
+    hue_values = sorted(merged[hue_param].dropna().unique().tolist()) if hue_param else None
     palette = sns.color_palette("tab10", len(hue_values)) if hue_values else None
 
     fig, ax = plt.subplots(figsize=(8, 5))

@@ -73,6 +73,7 @@ def main(argv: list[str] | None = None) -> None:
     kwargs = dict(
         x_axis=settings["x_axis"],
         hue_param=settings.get("hue_param"),
+        exclude_hue_value=settings.get("exclude_hue_value"),
         engines=settings.get("engines"),
         max_bond_dimension=settings.get("max_bond_dimension"),
         max_terms=settings.get("max_terms"),

@@ -170,3 +170,43 @@ def test_build_engines_empty_list():
 
     engines = build_engines([])
     assert engines == []
+
+
+def test_plot_magnetization_excludes_one_hue_value(tmp_path, monkeypatch):
+    import importlib
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    mag_plot = importlib.import_module("mssim.plots.magnetization")
+
+    df = pd.DataFrame(
+        [
+            {"engine": "qiskit", "circuit": "demo", "n_qubits": 4, "depth": 1, "run_id": 0, "max_bond_dimension": None, "max_terms": None, "J": 1.0, "h": 0.5, "b": 0.25, "magnetization": 0.1},
+            {"engine": "qiskit", "circuit": "demo", "n_qubits": 4, "depth": 2, "run_id": 0, "max_bond_dimension": None, "max_terms": None, "J": 1.0, "h": 0.5, "b": 0.25, "magnetization": 0.2},
+            {"engine": "qiskit", "circuit": "demo", "n_qubits": 5, "depth": 3, "run_id": 0, "max_bond_dimension": None, "max_terms": None, "J": 1.0, "h": 0.5, "b": 0.25, "magnetization": 0.3},
+        ]
+    )
+
+    captured = {}
+    fig, ax = plt.subplots()
+
+    def fake_draw_curves(ax, data, x_col, y_col, engines, hue_param, hue_values, palette):
+        captured["data"] = data.copy()
+        captured["hue_values"] = list(hue_values) if hue_values is not None else None
+
+    monkeypatch.setattr(mag_plot, "draw_curves", fake_draw_curves)
+    monkeypatch.setattr(mag_plot, "add_legend", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mag_plot, "add_zoom_inset", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mag_plot, "save_figure", lambda fig, output_file, default_name: tmp_path / default_name)
+    monkeypatch.setattr(mag_plot.plt, "subplots", lambda *args, **kwargs: (fig, ax))
+
+    mag_plot.plot_magnetization(
+        df,
+        x_axis="n_qubits",
+        hue_param="depth",
+        exclude_hue_value=[1, 2],
+        output_file=tmp_path / "plot.png",
+    )
+
+    assert captured["hue_values"] == [3]
+    assert set(captured["data"]["depth"].unique()) == {3}

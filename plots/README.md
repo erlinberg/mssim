@@ -23,3 +23,5 @@ bash plots/run_plotting.sh plots/plot_settings.json
 ```
 
 The output filename is taken from `output.filename` in the settings file. Relative paths are saved inside this folder.
+
+If `hue_param` is set, you can also provide `exclude_hue_value` as a single value or a list of values to drop one or more hue buckets and reduce the number of plotted curves.

@@ -117,6 +117,7 @@ Reusable plotting code lives under [src/mssim/plots/](src/mssim/plots/) and is s
 - `magnetization.py` (and other obervables) observable-specific plotting pipeline
 
 The launcher in [plots/main_plotting.py](plots/main_plotting.py) reads [plots/plot_settings.json](plots/plot_settings.json) and saves the output image to the filename specified in `output.filename`. Relative output names are resolved inside the top-level [plots/](plots/) folder.
+When `hue_param` is used, `exclude_hue_value` can be set in [plots/plot_settings.json](plots/plot_settings.json) as a single value or list to omit one or more hue buckets from the plot.
 
 ### Settings JSON Format
 
