@@ -1,0 +1,19 @@
+{
+  "input_file": "results/0527_mag.jsonl",
+  "plot_function": "plot_magnetization_diff",
+  "x_axis": "n_qubits",
+  "hue_param": "depth",
+  "engines": ["mpstab", "quimb", "pauliprop"],
+  "max_bond_dimension": 8,
+  "max_terms": 800000,
+  "zoom_ylim": null,
+  "common_fixed": {
+    "circuit": "kicked_ising",
+    "J": 0.7853981633974483,
+    "h": 0.39269908169872414,
+    "b": 0.39269908169872414
+  },
+  "output": {
+    "filename": "magnetization_diff_plot.pdf"
+  }
+}

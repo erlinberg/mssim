@@ -31,6 +31,10 @@ mssim/
 ├── script/
 │   ├── run_simple.sh                # Single-machine launcher
 │   └── run_parallel.sh              # SLURM array job launcher
+├── plots/
+│   ├── main_plotting.py              # Plotting CLI entrypoint
+│   ├── run_plotting.sh               # Bash wrapper for plotting
+│   └── plot_settings.json            # Plot configuration
 ├── tests/
 │   └── test_basic.py
 ├── results/                         # Output directory
@@ -99,7 +103,20 @@ graph TD
 pip install -e .
 
 ./scripts/run_simple.sh <settings.json>
+
+# Generate plots from the plotting settings file
+bash plots/run_plotting.sh
 ```
+
+## Plotting Layout
+
+Reusable plotting code lives under [src/mssim/plots/](src/mssim/plots/) and is split into:
+
+- `general.py` for data loading and other observable-agnostic helpers
+- `utilities.py` for shared plotting utilities
+- `magnetization.py` (and other obervables) observable-specific plotting pipeline
+
+The launcher in [plots/main_plotting.py](plots/main_plotting.py) reads [plots/plot_settings.json](plots/plot_settings.json) and saves the output image to the filename specified in `output.filename`. Relative output names are resolved inside the top-level [plots/](plots/) folder.
 
 ### Settings JSON Format
 
