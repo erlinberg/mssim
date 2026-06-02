@@ -17,6 +17,11 @@
 
 set -euo pipefail
 
+read_json_list() {
+    local expr="$1"
+    jq -r "(${expr}) | if type == \"array\" then .[] else . end" "$SETTINGS"
+}
+
 # 1. Load jq early to parse JSON parameters
 module load jq/1.6-GCCcore-12.2.0
 
@@ -29,12 +34,13 @@ if [[ ! -f "$SETTINGS" ]]; then
     exit 1
 fi
 
-# 2. Read sweep parameters using the new array syntax
-mapfile -t N_QUBITS_LIST < <(jq -r '.sweep.n_qubits[]' "$SETTINGS")
-mapfile -t DEPTH_LIST < <(jq -r '.sweep.depth[]' "$SETTINGS")
-mapfile -t ENGINE_LIST < <(jq -r '.execution.engines[]' "$SETTINGS")
-mapfile -t MAX_BOND_LIST < <(jq -r '(.sweep.max_bond_dimension // [.execution.max_bond_dimension] // [null])[]' "$SETTINGS")
-mapfile -t MAX_TERMS_LIST < <(jq -r '(.sweep.max_terms // [.execution.max_terms] // [null])[]' "$SETTINGS")
+# 2. Read run parameters. Each entry may come from a sweep array or a scalar
+# top-level setting, which makes single-run launches work without a sweep block.
+mapfile -t N_QUBITS_LIST < <(read_json_list '(.sweep.n_qubits // .model.n_qubits)')
+mapfile -t DEPTH_LIST < <(read_json_list '(.sweep.depth // .model.depth)')
+mapfile -t ENGINE_LIST < <(read_json_list '.execution.engines')
+mapfile -t MAX_BOND_LIST < <(read_json_list '(.sweep.max_bond_dimension // .execution.max_bond_dimension // null)')
+mapfile -t MAX_TERMS_LIST < <(read_json_list '(.sweep.max_terms // .execution.max_terms // null)')
 OBSERVABLE_MODE=$(jq -r '.model.observable // ""' "$SETTINGS")
 VERBOSE_OUTPUT=$(jq -r '.output.verbose // false' "$SETTINGS")
 
@@ -86,20 +92,25 @@ done
 TOTAL=${#TASKS[@]}
 
 if [[ "$TOTAL" -eq 0 ]]; then
-    echo "ERROR: sweep produces zero tasks. Check sweep.n_qubits, sweep.depth, sweep.max_bond_dimension, sweep.max_terms, execution.engines, and model.observable in $SETTINGS." >&2
+    echo "ERROR: run produces zero tasks. Check sweep.n_qubits, sweep.depth, sweep.max_bond_dimension, sweep.max_terms, execution.engines, model.n_qubits, model.depth, and model.observable in $SETTINGS." >&2
     exit 1
 fi
 
 # 3. If NOT inside a SLURM array job, submit the array
 if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     mkdir -p logs
-    echo "Sweep dimensions: ${TOTAL} tasks"
-    sbatch --array="0-$(( TOTAL - 1 ))" "$0" "$SETTINGS" "${EXTRA_ARGS[@]}"
-    exit 0
+    if [[ "$TOTAL" -gt 1 ]]; then
+        echo "Run dimensions: ${TOTAL} tasks"
+        sbatch --array="0-$(( TOTAL - 1 ))" "$0" "$SETTINGS" "${EXTRA_ARGS[@]}"
+        exit 0
+    fi
+
+    TASK_ID=0
+else
+    TASK_ID="${SLURM_ARRAY_TASK_ID}"
 fi
 
-# 4. Inside SLURM array task: compute specific parameters
-TASK_ID="${SLURM_ARRAY_TASK_ID}"
+# 4. Compute specific parameters for the selected task
 
 IFS='|' read -r N_QUBITS DEPTH ENGINE MAX_BOND MAX_TERMS OBSERVABLE <<< "${TASKS[$TASK_ID]}"
 

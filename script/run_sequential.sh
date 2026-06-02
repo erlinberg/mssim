@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 
 # Usage:
-#   ./run_parallel.sh <settings.json>
+#   ./run_sequential.sh <settings.json>
 
 set -euo pipefail
 
+read_json_list() {
+    local expr="$1"
+    jq -r "(${expr}) | if type == \"array\" then .[] else . end" "$SETTINGS"
+}
+
 # Parse arguments
-SETTINGS="${1:?Usage: ./run_parallel.sh <settings.json>}"
+SETTINGS="${1:?Usage: ./run_sequential.sh <settings.json>}"
 EXTRA_ARGS=("${@:2}")
 
 if [[ ! -f "$SETTINGS" ]]; then
@@ -14,12 +19,13 @@ if [[ ! -f "$SETTINGS" ]]; then
     exit 1
 fi
 
-# 1. Read sweep parameters (Mac compatible alternative to mapfile)
-N_QUBITS_LIST=($(jq -r '.sweep.n_qubits[]' "$SETTINGS"))
-DEPTH_LIST=($(jq -r '.sweep.depth[]' "$SETTINGS"))
-ENGINE_LIST=($(jq -r '.execution.engines[]' "$SETTINGS"))
-MAX_BOND_LIST=($(jq -r '(.sweep.max_bond_dimension // [.execution.max_bond_dimension] // [null])[]' "$SETTINGS"))
-MAX_TERMS_LIST=($(jq -r '(.sweep.max_terms // [.execution.max_terms] // [null])[]' "$SETTINGS"))
+# 1. Read run parameters. Each entry may come from a sweep array or a scalar
+# top-level setting, which makes single-run launches work without a sweep block.
+N_QUBITS_LIST=($(read_json_list '(.sweep.n_qubits // .model.n_qubits)'))
+DEPTH_LIST=($(read_json_list '(.sweep.depth // .model.depth)'))
+ENGINE_LIST=($(read_json_list '.execution.engines'))
+MAX_BOND_LIST=($(read_json_list '(.sweep.max_bond_dimension // .execution.max_bond_dimension // null)'))
+MAX_TERMS_LIST=($(read_json_list '(.sweep.max_terms // .execution.max_terms // null)'))
 OBSERVABLE_MODE=$(jq -r '.model.observable // ""' "$SETTINGS")
 VERBOSE_OUTPUT=$(jq -r '.output.verbose // false' "$SETTINGS")
 
@@ -67,11 +73,11 @@ done
 TOTAL=${#TASKS[@]}
 
 if [[ "$TOTAL" -eq 0 ]]; then
-    echo "ERROR: sweep produces zero tasks." >&2
+    echo "ERROR: run produces zero tasks." >&2
     exit 1
 fi
 
-echo "Starting sequential sweep: ${TOTAL} tasks total."
+echo "Starting sequential run: ${TOTAL} task(s) total."
 mkdir -p logs
 
 # 2. Local Environment Setup
