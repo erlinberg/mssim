@@ -55,15 +55,7 @@ for N_QUBITS in "${N_QUBITS_LIST[@]}"; do
 
             for MAX_BOND in "${MAX_BOND_VALUES[@]}"; do
                 for MAX_TERMS in "${MAX_TERMS_VALUES[@]}"; do
-                    if [[ "$OBSERVABLE_MODE" == "magnetization" ]]; then
-                        for (( O_IDX=0; O_IDX < N_QUBITS; O_IDX++ )); do
-                            OBSERVABLE=$(printf '%*s' "$N_QUBITS" '' | tr ' ' 'I')
-                            OBSERVABLE="${OBSERVABLE:0:O_IDX}Z${OBSERVABLE:O_IDX+1}"
-                            TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE}")
-                        done
-                    else
-                        TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE_MODE}")
-                    fi
+                    TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE_MODE}")
                 done
             done
         done

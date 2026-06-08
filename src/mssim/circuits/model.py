@@ -63,8 +63,8 @@ class CircuitModel:
 
     def __post_init__(self) -> None:
         # Just doing some checks to the builder function
-        if len(self.observable) != self.n_qubits:
-            raise ValueError(f"Observable length ({len(self.observable)}) must equal "f"n_qubits ({self.n_qubits}).")
+        # if len(self.observable) != self.n_qubits:
+        #     raise ValueError(f"Observable length ({len(self.observable)}) must equal "f"n_qubits ({self.n_qubits}).")
         
         if self.n_params < 0: raise ValueError(f"n_params must be non-negative, got {self.n_params}.")
 
