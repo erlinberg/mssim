@@ -78,6 +78,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output", type=str, default=None,
         help="Output file path (overrides settings.output.filename).",
     )
+    p.add_argument(
+        "--kwarg_id", type=int, default=None,
+        help="ID of the model specific parameters to use from settings.sweep.kwargs.",
+    )
+
     return p.parse_args(argv)
 
 
@@ -116,6 +121,8 @@ def merge_args(settings: dict, args: argparse.Namespace) -> dict:
         cfg["execution"]["max_terms"] = cfg["sweep"]["max_terms"]
     if args.output is not None:
         cfg["output"]["filename"] = args.output
+    if args.kwarg_id is not None:
+        cfg["model"]["kwargs"] = cfg["sweep"].get("kwargs", [])[args.kwarg_id]
 
     return cfg
 
