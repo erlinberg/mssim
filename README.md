@@ -4,9 +4,15 @@ A quantum circuit classical simulation package supporting multiple simulation en
 
 ## Installation
 
+After the project has been downloaded the [mpstab](https://github.com/mattia-robbiano/mssim) library must be installed into the project folder first. Then the rest of the installation can be done by running following command in the project root:
+
 ```bash
 pip install -e .
 ```
+
+> [!NOTE]
+> This package only supports 3.12.* versions of Python.
+
 
 ## Project Structure
 

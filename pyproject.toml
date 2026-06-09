@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Multi System Simulator"
 authors = [{name = "Mattia Robbiano"}]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = "==3.12.*"
 dependencies = [
     "alembic==1.18.1",
     "antlr4-python3-runtime==4.13.2",
@@ -66,7 +66,7 @@ dependencies = [
     "tqdm==4.67.1",
     "typing_extensions==4.15.0",
     "zipp==3.23.0",
-    "mpstab @ ../mpstab",
+    "mpstab",
     "pauli-prop>=0.2.0",
 ]
 
