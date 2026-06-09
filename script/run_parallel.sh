@@ -41,6 +41,7 @@ mapfile -t DEPTH_LIST < <(read_json_list '(.sweep.depth // .model.depth)')
 mapfile -t ENGINE_LIST < <(read_json_list '.execution.engines')
 mapfile -t MAX_BOND_LIST < <(read_json_list '(.sweep.max_bond_dimension // .execution.max_bond_dimension // null)')
 mapfile -t MAX_TERMS_LIST < <(read_json_list '(.sweep.max_terms // .execution.max_terms // null)')
+SWEEP_KWARG_COUNT=$(jq -r '.sweep.kwargs | if type == "array" then length else 0 end' "$SETTINGS")
 OBSERVABLE_MODE=$(jq -r '.model.observable // ""' "$SETTINGS")
 VERBOSE_OUTPUT=$(jq -r '.output.verbose // false' "$SETTINGS")
 
@@ -74,7 +75,15 @@ for N_QUBITS in "${N_QUBITS_LIST[@]}"; do
 
             for MAX_BOND in "${MAX_BOND_VALUES[@]}"; do
                 for MAX_TERMS in "${MAX_TERMS_VALUES[@]}"; do
-                    TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE_MODE}")
+                    MAX_KWARG_COUNT=1
+
+                    if [[ $SWEEP_KWARG_COUNT != 0 ]]; then
+                        MAX_KWARG_COUNT=$SWEEP_KWARG_COUNT
+                    fi
+
+                    for ((KWARG_ID=0;KWARG_ID<$MAX_KWARG_COUNT;KWARG_ID++)); do
+                        TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE_MODE}|${KWARG_ID}")
+                    done
                 done
             done
         done
@@ -84,7 +93,7 @@ done
 TOTAL=${#TASKS[@]}
 
 if [[ "$TOTAL" -eq 0 ]]; then
-    echo "ERROR: run produces zero tasks. Check sweep.n_qubits, sweep.depth, sweep.max_bond_dimension, sweep.max_terms, execution.engines, model.n_qubits, model.depth, and model.observable in $SETTINGS." >&2
+    echo "ERROR: run produces zero tasks. Check sweep.n_qubits, sweep.depth, sweep.max_bond_dimension, sweep.max_terms, sweep.kwargs, execution.engines, model.n_qubits, model.depth, and model.observable in $SETTINGS." >&2
     exit 1
 fi
 
@@ -104,9 +113,9 @@ fi
 
 # 4. Compute specific parameters for the selected task
 
-IFS='|' read -r N_QUBITS DEPTH ENGINE MAX_BOND MAX_TERMS OBSERVABLE <<< "${TASKS[$TASK_ID]}"
+IFS='|' read -r N_QUBITS DEPTH ENGINE MAX_BOND MAX_TERMS OBSERVABLE KWARG_ID <<< "${TASKS[$TASK_ID]}"
 
-echo "Task ${TASK_ID}: n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}, max_bond=${MAX_BOND}, max_terms=${MAX_TERMS}, observable=${OBSERVABLE}"
+echo "Task ${TASK_ID}: n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}, max_bond=${MAX_BOND}, max_terms=${MAX_TERMS}, observable=${OBSERVABLE}, kwarg_id=${KWARG_ID}"
 
 # 5. Environment Setup (Python & Environment)
 module load Python/3.12.3-GCCcore-13.3.0
@@ -143,6 +152,10 @@ fi
 
 if [[ -n "${OBSERVABLE}" ]]; then
     MAIN_ARGS+=(--observable "${OBSERVABLE}")
+fi
+
+if [[ $SWEEP_KWARG_COUNT -gt 0 ]]; then
+    MAIN_ARGS+=(--kwarg_id "${KWARG_ID}")
 fi
 
 python main.py "${MAIN_ARGS[@]}"

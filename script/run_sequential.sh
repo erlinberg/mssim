@@ -26,6 +26,7 @@ DEPTH_LIST=($(read_json_list '(.sweep.depth // .model.depth)'))
 ENGINE_LIST=($(read_json_list '.execution.engines'))
 MAX_BOND_LIST=($(read_json_list '(.sweep.max_bond_dimension // .execution.max_bond_dimension // null)'))
 MAX_TERMS_LIST=($(read_json_list '(.sweep.max_terms // .execution.max_terms // null)'))
+SWEEP_KWARG_COUNT=$(jq -r '.sweep.kwargs | if type == "array" then length else 0 end' "$SETTINGS")
 OBSERVABLE_MODE=$(jq -r '.model.observable // ""' "$SETTINGS")
 VERBOSE_OUTPUT=$(jq -r '.output.verbose // false' "$SETTINGS")
 
@@ -55,7 +56,15 @@ for N_QUBITS in "${N_QUBITS_LIST[@]}"; do
 
             for MAX_BOND in "${MAX_BOND_VALUES[@]}"; do
                 for MAX_TERMS in "${MAX_TERMS_VALUES[@]}"; do
-                    TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE_MODE}")
+                    MAX_KWARG_COUNT=1
+
+                    if [[ $SWEEP_KWARG_COUNT != 0 ]]; then
+                        MAX_KWARG_COUNT=$SWEEP_KWARG_COUNT
+                    fi
+
+                    for ((KWARG_ID=0;KWARG_ID<$MAX_KWARG_COUNT;KWARG_ID++)); do
+                        TASKS+=("${N_QUBITS}|${DEPTH}|${ENGINE}|${MAX_BOND}|${MAX_TERMS}|${OBSERVABLE_MODE}|${KWARG_ID}")
+                    done
                 done
             done
         done
@@ -95,8 +104,9 @@ for (( TASK_ID=0; TASK_ID < TOTAL; TASK_ID++ )); do
     MAX_BOND=$(echo "$TASK" | cut -d'|' -f4)
     MAX_TERMS=$(echo "$TASK" | cut -d'|' -f5)
     OBSERVABLE=$(echo "$TASK" | cut -d'|' -f6)
+    KWARG_ID=$(echo "$TASK" | cut -d'|' -f7)
     
-    echo "[${TASK_ID}/${TOTAL}] n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}, max_bond=${MAX_BOND}, max_terms=${MAX_TERMS}, observable=${OBSERVABLE}"
+    echo "[${TASK_ID}/${TOTAL}] n_qubits=${N_QUBITS}, depth=${DEPTH}, engine=${ENGINE}, max_bond=${MAX_BOND}, max_terms=${MAX_TERMS}, observable=${OBSERVABLE}, kwarg_id=${KWARG_ID}"
     
     MAIN_ARGS=(
         --settings "${SETTINGS}"
@@ -117,6 +127,10 @@ for (( TASK_ID=0; TASK_ID < TOTAL; TASK_ID++ )); do
 
     if [[ -n "${OBSERVABLE}" ]]; then
         MAIN_ARGS+=(--observable "${OBSERVABLE}")
+    fi
+
+    if [[ $SWEEP_KWARG_COUNT -gt 0 ]]; then
+        MAIN_ARGS+=(--kwarg_id "${KWARG_ID}")
     fi
 
     python main.py "${MAIN_ARGS[@]}" # > "logs/mssim_${TASK_ID}.out" 2> "logs/mssim_${TASK_ID}.err"
