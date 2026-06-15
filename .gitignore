@@ -10,3 +10,4 @@ uv.lock
 /*.json
 *.pdf
 *.png
+.vscode/

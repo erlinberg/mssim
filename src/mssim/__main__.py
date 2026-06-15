@@ -15,13 +15,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
-import time
-
-from mssim.circuits.library import build_circuit
-from mssim.engines.library import build_engines
-from mssim.executor import executor
+from mssim.runner import run_simulation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,7 +28,7 @@ logger = logging.getLogger("mssim.main")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    
+
     p = argparse.ArgumentParser(
         description="mssim: Multi System Simulator",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -78,10 +73,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output", type=str, default=None,
         help="Output file path (overrides settings.output.filename).",
     )
-    p.add_argument(
-        "--kwarg_id", type=int, default=None,
-        help="ID of the model specific parameters to use from settings.sweep.kwargs.",
-    )
 
     return p.parse_args(argv)
 
@@ -96,11 +87,12 @@ def merge_args(settings: dict, args: argparse.Namespace) -> dict:
         Ensures the format of the settings dictonary is correct and applies command line overrides on top of the settings dictionary
     """
     cfg = dict(settings)            # shallow copy to ensure the format is correct
-    cfg.setdefault("model", {})     # prevent errors in case of misconfiguration
+    # prevent errors in case of misconfiguration
+    cfg.setdefault("model", {})
     cfg.setdefault("execution", {})
     cfg.setdefault("sweep", {})
     cfg.setdefault("output", {})
-    
+
     if args.n_qubits is not None:
         cfg["model"]["n_qubits"] = args.n_qubits
     if args.depth is not None:
@@ -108,7 +100,7 @@ def merge_args(settings: dict, args: argparse.Namespace) -> dict:
     if args.observable is not None:
         cfg["model"]["observable"] = args.observable
     if args.engine is not None:
-        cfg["execution"]["engines"] = args.engine.split(",")
+        cfg["execution"]["engine"] = args.engine
     if args.n_runs is not None:
         cfg["execution"]["n_runs"] = args.n_runs
     if args.max_bond is not None:
@@ -121,109 +113,43 @@ def merge_args(settings: dict, args: argparse.Namespace) -> dict:
         cfg["execution"]["max_terms"] = cfg["sweep"]["max_terms"]
     if args.output is not None:
         cfg["output"]["filename"] = args.output
-    if args.kwarg_id is not None:
-        cfg["model"]["kwargs"] = cfg["sweep"].get("kwargs", [])[args.kwarg_id]
 
     return cfg
 
 
 def main(argv: list[str] | None = None) -> None:
-
     """
-        Parses command-line arguments, loads settings, calls the subroutines building the circuit, setup the simulator, the output writing and runs.
-    
+        Parses command-line arguments, loads settings and calls the simulation subroutine.
+
         Args:
             argv (list[str] | None): Optional list of command-line arguments. If None, uses sys.argv.
     """
-    # TODO observable should not be in circuit_kwargs
-    
 
     # Arguments can come both from the json setting file and from the command line (in the bash script). The latter have priority.
     # Calling parse_args for getting the arguments in json file as a dictionary and merging it with the command line ones.
     # The arguments are then used to build the model, the engines and the output directory.
-    args        = parse_args(argv)
-    settings    = merge_args(load_settings(args.settings), args)
+    args = parse_args(argv)
+    settings = merge_args(load_settings(args.settings), args)
 
-    model_cfg         = settings["model"]
-    circuit_name: str = model_cfg["circuit"]
-    n_qubits: int     = model_cfg["n_qubits"]
-    depth: int        = model_cfg["depth"]
-    observable: str | None = model_cfg.get("observable", None)
-    circuit_kwargs: dict         = model_cfg.get("kwargs", {})
-    circuit_kwargs["observable"] = observable
-
-    exec_cfg               = settings["execution"]
-    engine_keys: list[str] = exec_cfg.get("engines", ["all"])
-    max_bond: int | None   = exec_cfg.get("max_bond_dimension", None)
-    max_terms: int | None  = exec_cfg.get("max_terms", None)
-    n_runs: int            = exec_cfg.get("n_runs", 1)
-
-    out_cfg          = settings["output"]
-    verbose: bool  = out_cfg.get("verbose", False)
-    output_file: str = out_cfg.get("filename", "results.jsonl")
-    output_fmt: str  = out_cfg.get("format", "jsonl")
-    
-    if verbose: logger.info("Building circuit '%s' — n_qubits=%d, depth=%d", circuit_name, n_qubits, depth)
-    model = build_circuit(circuit_name, n_qubits=n_qubits, depth=depth, **circuit_kwargs)
-
-    if verbose: logger.info("Building engines: %s (max_bond=%s, max_terms=%s)", engine_keys, max_bond, max_terms)
-    engines = build_engines(
-        engine_keys,
-        max_bond_dimension=max_bond,
-        max_terms=max_terms,
-    )
-
-    if verbose: logger.info("Accessing output directory exists for file '%s'", output_file)
-    os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
-
-
-    # Extra stuff for logging and possible later use. Maybe not useful.
-    extra_metadata = {
-        "slurm_task_id": args.run_id,
-        "settings_file":       os.path.abspath(args.settings),
-        "launch_time":         time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "slurm_job_id":        os.environ.get("SLURM_JOB_ID"),
-        "slurm_array_job_id":  os.environ.get("SLURM_ARRAY_JOB_ID"),
-        "slurm_array_task_id": os.environ.get("SLURM_ARRAY_TASK_ID"),
+    # Build simulation config from settings
+    sim_config = {
+        "circuit": settings["model"]["circuit"],
+        "n_qubits": settings["model"]["n_qubits"],
+        "depth": settings["model"]["depth"],
+        "observable": settings["model"].get("observable", None),
+        "kwargs": settings["model"].get("kwargs", {}),
+        "engine": settings["execution"].get("engine", "all"),
+        "max_bond_dimension": settings["execution"].get("max_bond_dimension", None),
+        "max_terms": settings["execution"].get("max_terms", None),
+        "n_runs": settings["execution"].get("n_runs", 1),
+        "verbose": settings["output"].get("verbose", False),
+        "filename": settings["output"].get("filename", "results.jsonl"),
+        "format": settings["output"].get("format", "jsonl"),
+        "run_id": args.run_id,
+        "settings_file": args.settings,
     }
 
-
-    # Build the executor object, containing informations for statistics to be collected, output and parameters.
-    # run is called on executor, with the chosen model and engines.
-    # Results are stored in batch_result structure. 
-    exe = executor(
-        n_runs=n_runs,
-        output_file=output_file,
-        output_fmt=output_fmt,
-        extra_metadata=extra_metadata,
-        skip_on_error=False,
-        verbose=verbose,
-    )
-    if verbose: logger.info("Starting execution: %d engine(s) × %d run(s) → %s",len(engines), n_runs, output_file,)
-    batch_results = exe.run(model, engines)
-
-
-    print("=" * 72)
-    
-    for br in batch_results:
-        
-        s = br.summary()
-        
-        print(
-            f"  Engine : {s['engine']}\n"
-            f"  Circuit: {s['circuit']}  n_qubits={s['n_qubits']}  depth={s['depth']}\n"
-            f"  Runs   : {s['n_runs']}\n"
-            f"  ⟨O⟩    : {s['expval_mean']:.6f} ± {s['expval_std']:.6f}\n"
-            f"  Time   : {s['elapsed_mean_s']:.4f} s ± {s['elapsed_std_s']:.4f} s  "
-            f"(total {s['elapsed_total_s']:.2f} s)"
-        )
-        
-        if "fidelity_mean" in s:
-            print(f"  Fidelity: {s['fidelity_mean']:.6f} ± {s['fidelity_std']:.6f}")
-    
-    print("=" * 72 )
-
-    if verbose: logger.info("Done. Results written to '%s'.", output_file)
+    run_simulation(sim_config)
 
 
 if __name__ == "__main__":
